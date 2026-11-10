@@ -49,7 +49,7 @@ Instalasi
 Clone repository
 
 Shell
-git clone https://github.com/kalilasyifazzahra/peminjaman-buku.git
+git clone https://github.com/gesannn/UKK-2026-Andi-Alfatih-Ghaisan-Peminjaman-Buku.git
 cd peminjaman-buku
 Install dependency
 
