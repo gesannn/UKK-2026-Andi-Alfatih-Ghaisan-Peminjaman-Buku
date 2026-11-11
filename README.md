@@ -1,47 +1,54 @@
-# Aplikasi Peminjaman Buku
+#  Sistem Informasi Peminjaman Buku
 
-Aplikasi web berbasis Laravel untuk mengelola data buku dan peminjaman buku perpustakaan sekolah.
+Aplikasi web berbasis **Laravel** dengan panel admin **Filament 4** untuk mengelola koleksi buku dan transaksi peminjaman di perpustakaan sekolah.
 
-## Deskripsi Program
+> Proyek UKK 2026 — **Andi Alfatih Ghaisan Aththobarani**
 
-Aplikasi ini mencatat data buku, data pengguna, dan transaksi peminjaman. Ada dua jenis pengguna, ditentukan kolom `role` pada tabel `users`:
+---
 
-- **admin**: mengelola data buku dan peminjaman.
-- **siswa** (default): pengguna yang meminjam buku. Memiliki data `kelas`.
+##  Gambaran Umum
 
-Alur peminjaman:
+Sistem ini menyimpan tiga jenis data utama: buku, pengguna, dan peminjaman. Pengguna dibagi menjadi dua peran lewat kolom `role` pada tabel `users`:
 
-1. Siswa meminjam buku, lalu sistem membuat data `loans` dengan `loan_date`, `due_date`, dan `status` bawaan `dipinjam`.
-2. Saat buku dikembalikan, `returned_at` diisi tanggal pengembalian dan `status` diperbarui.
-3. Jika pengembalian melewati `due_date`, denda dicatat pada kolom `fine`.
+| Peran | Tugas |
+|-------|-------|
+| `admin` | Mengatur data buku, pengguna, dan seluruh transaksi peminjaman |
+| `siswa` (bawaan) | Peminjam buku; memiliki data `kelas` |
 
-Status pengerjaan saat ini: struktur database (migration) dan model sudah dibuat. Route baru berisi halaman awal, sedangkan controller untuk buku dan peminjaman belum dibuat.
+### Tahapan Peminjaman
 
-## Fitur
+1. Peminjaman dicatat untuk seorang siswa. Sistem membuat baris baru di tabel `loans` berisi `loan_date`, `due_date`, dan `status` awal `dipinjam`.
+2. Ketika buku diserahkan kembali, kolom `returned_at` diisi dan `status` diubah.
+3. Jika tanggal kembali melewati `due_date`, besar denda dicatat di kolom `fine`.
 
-- **Books**: data buku (judul, penulis, penerbit, tahun, stok).
-- **Loans**: data peminjaman (tanggal pinjam, batas kembali, tanggal kembali, status, denda).
-- **Users**: pengguna dengan peran dan kelas.
+##  Fitur
 
-## Teknologi
+- **Buku** — judul, penulis, penerbit, tahun terbit, dan stok.
+- **Peminjaman** — tanggal pinjam, tenggat, tanggal kembali, status, dan denda.
+- **Pengguna** — akun dengan peran dan kelas.
+- **Panel Admin Filament** — daftar data, form input, pencarian, dan filter.
 
-- PHP & Laravel
-- MySQL (XAMPP)
+##  Teknologi
+
+- PHP dan Laravel
+- Filament 4 (panel admin)
+- MySQL melalui XAMPP
 - Composer
+- Git dan GitHub
 
-## ERD
+##  ERD (Entity Relationship Diagram)
 
 ```mermaid
 erDiagram
-  USERS ||--o{ LOANS : meminjam
-  BOOKS ||--o{ LOANS : dipinjam
+  USERS ||--o{ LOANS : "mengajukan"
+  BOOKS ||--o{ LOANS : "menjadi objek"
   USERS {
     bigint id PK
     string name
     string email UK
+    string password
     string role
     string kelas
-    string password
     timestamp email_verified_at
   }
   BOOKS {
@@ -64,54 +71,51 @@ erDiagram
   }
 ```
 
-## Dokumentasi Fungsi / Prosedur
+##  Dokumentasi Model
 
-### Model `Book` (`app/Models/Book.php`)
+### `Book` — `app/Models/Book.php`
 
-| Elemen | Jenis | Keterangan |
+| Elemen | Jenis | Penjelasan |
 |--------|-------|------------|
-| `$fillable` | properti | Kolom yang boleh diisi massal: `title`, `author`, `publisher`, `year`, `stock`. |
+| `$fillable` | Properti | Kolom yang dapat diisi sekaligus: `title`, `author`, `publisher`, `year`, `stock`. |
+| `loans()` | Relasi `HasMany` | Mengambil semua peminjaman untuk buku tersebut. Contoh: `$book->loans`. |
 
-### Model `Loan` (`app/Models/Loan.php`)
+### `Loan` — `app/Models/Loan.php`
 
-| Elemen | Jenis | Parameter | Return | Keterangan |
-|--------|-------|-----------|--------|------------|
-| `$fillable` | properti | - | - | `user_id`, `book_id`, `loan_date`, `due_date`, `returned_at`, `status`, `fine`. |
-| `$casts` | properti | - | - | `loan_date`, `due_date`, `returned_at` otomatis menjadi objek tanggal (Carbon). |
-| `user()` | fungsi relasi | - | `BelongsTo` | Mengambil user peminjam melalui `user_id`. Contoh: `$loan->user->name`. |
-| `book()` | fungsi relasi | - | `BelongsTo` | Mengambil buku yang dipinjam melalui `book_id`. Contoh: `$loan->book->title`. |
+| Elemen | Jenis | Penjelasan |
+|--------|-------|------------|
+| `$fillable` | Properti | `user_id`, `book_id`, `loan_date`, `due_date`, `returned_at`, `status`, `fine`. |
+| `$casts` | Properti | Kolom `loan_date`, `due_date`, dan `returned_at` dibaca sebagai objek tanggal (Carbon). |
+| `user()` | Relasi `BelongsTo` | Mengambil peminjam lewat `user_id`. Contoh: `$loan->user->name`. |
+| `book()` | Relasi `BelongsTo` | Mengambil buku lewat `book_id`. Contoh: `$loan->book->title`. |
 
-### Model `User` (`app/Models/User.php`)
+### `User` — `app/Models/User.php`
 
-| Elemen | Jenis | Parameter | Return | Keterangan |
-|--------|-------|-----------|--------|------------|
-| `$fillable` | properti | - | - | `name`, `email`, `password`, `role`, `kelas`. |
-| `$hidden` | properti | - | - | `password` dan `remember_token` disembunyikan saat data diubah ke array/JSON. |
-| `casts()` | fungsi | - | `array` | `email_verified_at` menjadi datetime, `password` otomatis di-hash. |
-| `isAdmin()` | fungsi | - | `bool` | `true` jika `role` bernilai `admin`, selain itu `false`. |
+| Elemen | Jenis | Penjelasan |
+|--------|-------|------------|
+| `$fillable` | Properti | `name`, `email`, `password`, `role`, `kelas`. |
+| `$hidden` | Properti | `password` dan `remember_token` tidak ikut tampil ketika model dikonversi ke array/JSON. |
+| `casts()` | Fungsi | `email_verified_at` menjadi datetime dan `password` di-hash otomatis. |
+| `isAdmin()` | Fungsi → `bool` | Bernilai `true` bila `role` sama dengan `admin`. |
+| `loans()` | Relasi `HasMany` | Mengambil riwayat peminjaman milik pengguna. Contoh: `$user->loans`. |
 
-### Route (`routes/web.php`)
+##  Daftar Route
 
-| Method | URL | Proses | Output |
-|--------|-----|--------|--------|
-| GET | `/` | Menjalankan closure | Menampilkan view `welcome` |
+| Method | URL | Keterangan |
+|--------|-----|------------|
+| GET | `/` | Menampilkan halaman awal (`welcome`) |
+| GET | `/admin` | Masuk ke panel admin Filament |
 
-## Debugging
+##  Debugging
 
-### Temuan pada kode saat ini
+### Masalah yang Pernah Ditemui dan Solusinya
 
-| No | Masalah | Dampak | Perbaikan |
-|----|---------|--------|-----------|
-| 1 | Model `Book` belum punya relasi ke `Loan`. | `$book->loans` menghasilkan error karena relasi tidak ditemukan. | Tambahkan `hasMany` (lihat di bawah). |
-| 2 | Model `User` belum punya relasi ke `Loan`. | `$user->loans` tidak bisa dipakai untuk riwayat pinjam siswa. | Tambahkan `hasMany` (lihat di bawah). |
-| 3 | Belum ada controller dan route untuk books dan loans. | Fitur belum bisa diakses dari browser. | Buat `BookController` dan `LoanController`, lalu daftarkan di `routes/web.php`. |
-| 4 | Nilai `status` ditulis sebagai string bebas. | Mudah typo (`dikembalikan` vs `dikembalikan `) sehingga filter tidak cocok. | Gunakan konstanta atau enum PHP. |
-| 5 | Stok belum terhubung dengan peminjaman. | Stok bisa tidak sinkron atau minus. | Kurangi stok saat pinjam, tambah saat kembali, di dalam `DB::transaction()`. |
-
-Perbaikan temuan 1 dan 2:
+**1. Relasi tidak lengkap di satu sisi**
+- *Gejala:* memanggil `$book->loans` atau `$user->loans` menimbulkan error relasi tidak ditemukan.
+- *Penyebab:* relasi `belongsTo` hanya ada di `Loan`, sedangkan sisi lawannya belum ditulis.
+- *Solusi:* tambahkan `hasMany` pada model `Book` dan `User`.
 
 ```php
-// app/Models/Book.php
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 public function loans(): HasMany
@@ -120,119 +124,54 @@ public function loans(): HasMany
 }
 ```
 
-```php
-// app/Models/User.php
-use Illuminate\Database\Eloquent\Relations\HasMany;
+**2. Nilai `status` tidak konsisten**
+- *Gejala:* filter status tidak menemukan data meski datanya ada.
+- *Penyebab:* `status` berupa teks bebas sehingga rawan salah ketik.
+- *Solusi:* simpan nilai status sebagai konstanta lalu pakai di semua tempat.
 
-public function loans(): HasMany
-{
-    return $this->hasMany(Loan::class);
-}
+```php
+// app/Models/Loan.php
+public const STATUS_DIPINJAM = 'dipinjam';
+public const STATUS_KEMBALI  = 'dikembalikan';
+
+// contoh pemakaian
+Loan::where('status', Loan::STATUS_DIPINJAM)->get();
 ```
 
-### Error umum dan solusinya
+**3. Stok tidak mengikuti transaksi**
+- *Gejala:* stok tetap atau bahkan menjadi minus setelah buku dipinjam.
+- *Penyebab:* belum ada proses yang mengubah `stock` saat pinjam dan kembali.
+- *Solusi:* periksa stok, kurangi stok, dan simpan peminjaman dalam satu transaksi database.
 
-| Error | Penyebab | Solusi |
-|-------|----------|--------|
-| `Base table or view not found` / `Failed to open the referenced table` saat migrate | Migration `loans` berjalan sebelum `users` atau `books` karena timestamp nama file lebih awal. | Pastikan nama file migration `loans` punya timestamp paling akhir, lalu `php artisan migrate:fresh`. |
-| `SQLSTATE[23000]: Integrity constraint violation` | `user_id` atau `book_id` yang dimasukkan tidak ada di tabel induk. | Pastikan data user dan buku sudah ada sebelum membuat peminjaman. |
-| `MassAssignmentException` | Kolom belum ada di `$fillable`. | Tambahkan kolom ke `$fillable` pada model. |
-| `Call to undefined relationship` | Relasi belum didefinisikan di model. | Tambahkan fungsi relasi (lihat perbaikan di atas). |
-| `Class "App\Models\Loan" not found` | Namespace atau nama file salah. | Cek `namespace` dan nama file, lalu `composer dump-autoload`. |
+```php
+use Illuminate\Support\Facades\DB;
 
-### Cara melacak bug
+DB::transaction(function () use ($book, $user) {
+    if ($book->stock < 1) {
+        abort(422, 'Stok buku habis');
+    }
 
-- Cetak nilai variabel: `dd($loan);` atau `dump($request->all());`
-- Catat ke log: `Log::info('data pinjam', $data);`, lalu baca `storage/logs/laravel.log`.
-- Cek daftar route: `php artisan route:list`
-- Cek status migration: `php artisan migrate:status`
-- Uji model lewat console: `php artisan tinker`, misalnya `App\Models\Loan::with('user','book')->first();`
-- Aktifkan `APP_DEBUG=true` di `.env` saat pengembangan agar pesan error lengkap tampil.
+    $book->decrement('stock');
 
-## Instalasi
+    Loan::create([
+        'user_id'   => $user->id,
+        'book_id'   => $book->id,
+        'loan_date' => now(),
+        'due_date'  => now()->addDays(7),
+        'status'    => Loan::STATUS_DIPINJAM,
+    ]);
+});
+```
 
-1. Clone repository
+### Error yang Sering Muncul
 
-   ```bash
-   git clone https://github.com/kalilasyifazzahra/peminjaman-buku.git
-   cd peminjaman-buku
-   ```
-
-2. Install dependency
-
-   ```bash
-   composer install
-   ```
-
-3. Salin file environment dan generate key
-
-   ```bash
-   cp .env.example .env
-   php artisan key:generate
-   ```
-
-4. Buat database (misalnya `peminjaman_buku`) di phpMyAdmin, lalu atur `.env`
-
-   ```env
-   DB_CONNECTION=mysql
-   DB_HOST=127.0.0.1
-   DB_PORT=3306
-   DB_DATABASE=peminjaman_buku
-   DB_USERNAME=root
-   DB_PASSWORD=
-   ```
-
-5. Jalankan migrasi
-
-   ```bash
-   php artisan migrate
-   ```
-
-6. Jalankan aplikasi
-
-   ```bash
-   php artisan serve
-   ```
-
-   Buka `http://127.0.0.1:8000` di browser.
-   
-## Database
-
-File database tersedia di `database/peminjaman_buku.sql`.
-Import lewat phpMyAdmin (tab Import), atau jalankan `php artisan migrate`.
-## Laporan Evaluasi
-
-### Tujuan
-Membuat aplikasi berbasis Laravel untuk mengelola data buku dan transaksi peminjaman buku perpustakaan.
-
-### Hasil yang Dicapai
-- Perancangan database: tabel `users`, `books`, dan `loans` beserta ERD (relasi one-to-many).
-- Migration dan model `Book`, `Loan`, `User`, dengan relasi `Loan` ke `User` dan `Book`.
-- Pembedaan peran pengguna lewat kolom `role` (`admin` dan `siswa`).
-- Dokumentasi: deskripsi program, dokumentasi fungsi, dan panduan debugging.
-- File database `database/peminjaman_buku.sql`.
-- Project tersimpan di GitHub.
-
-### Kendala
-- Push ke GitHub sempat gagal (`Repository not found` dan `rejected`), diselesaikan dengan memperbaiki remote dan `git pull --rebase`.
-- Urutan migration perlu dicek agar tabel `loans` dibuat setelah `users` dan `books`.
-
-### Kekurangan
-- Controller, route, dan tampilan untuk books dan loans belum dibuat.
-- Relasi `loans()` pada model `Book` dan `User` belum ada.
-- Logika stok dan perhitungan denda belum diimplementasikan.
-- Belum ada pengujian fitur.
-
-### Rencana Perbaikan
-1. Tambahkan relasi `hasMany` pada `Book` dan `User`.
-2. Buat `BookController` (CRUD) dan `LoanController` (pinjam, kembali, denda).
-3. Kurangi stok saat pinjam dan tambah saat kembali, di dalam `DB::transaction()`.
-4. Gunakan konstanta atau enum untuk `status`.
-5. Tambahkan login dan pembatasan akses admin lewat `isAdmin()`.
-
-### Kesimpulan
-Fondasi aplikasi (struktur database, model, dan dokumentasi) sudah selesai. Tahap berikutnya adalah mengimplementasikan fitur utama agar aplikasi dapat digunakan.
-
-## Lisensi
-
-Proyek ini menggunakan lisensi [MIT](https://opensource.org/licenses/MIT).
+| Pesan Error | Penyebab | Cara Mengatasi |
+|-------------|----------|----------------|
+| `SQLSTATE[HY000] [2002] Connection refused` | MySQL belum aktif | Nyalakan MySQL di XAMPP Control Panel, lalu cek `DB_HOST` dan `DB_PORT` |
+| `SQLSTATE[HY000] [1049] Unknown database` | Database belum dibuat atau namanya berbeda | Buat database di phpMyAdmin dan samakan dengan `DB_DATABASE` |
+| `SQLSTATE[HY000] [1045] Access denied` | Username/password database salah | Pada XAMPP bawaan: `DB_USERNAME=root`, `DB_PASSWORD=` (kosong) |
+| `Failed to open the referenced table` | Migration `loans` berjalan sebelum `users` / `books` | Pastikan timestamp file migration `loans` paling akhir, lalu `php artisan migrate:fresh` |
+| `SQLSTATE[23000] Integrity constraint violation` | `user_id` / `book_id` tidak ada di tabel induk | Isi data pengguna dan buku lebih dahulu |
+| `MassAssignmentException` | Kolom belum masuk `$fillable` | Tambahkan kolom ke `$fillable` |
+| `No application encryption key has been specified` | `APP_KEY` kosong | Jalankan `php artisan key:generate` |
+| `Class "App\Models\Loan" not found` | Namespace atau nama file tidak cocok | Periksa keduanya, lalu
