@@ -1,226 +1,230 @@
-# Aplikasi Peminjaman Buku
+# UKK 2026 - Aplikasi Peminjaman Buku
 
-Aplikasi web untuk membantu perpustakaan sekolah mencatat buku dan peminjamannya. Dibuat dengan Laravel, dan halaman pengelolaannya memakai Filament 4. Proyek ini saya kerjakan sebagai tugas UKK 2026.
+Aplikasi pencatatan peminjaman buku untuk perpustakaan sekolah. Backend-nya Laravel, sedangkan halaman kelola datanya memakai Filament 4.
 
-Pembuat: Andi Alfatih Ghaisan Aththobarani
+Dikerjakan oleh **Andi Alfatih Ghaisan Aththobarani** sebagai proyek Uji Kompetensi Keahlian (UKK) 2026.
 
 ---
 
-## Tentang Aplikasi
+## Ringkasan
 
-Selama ini peminjaman buku di sekolah sering dicatat manual di buku tulis. Akibatnya susah mengecek siapa yang belum mengembalikan buku, berapa stok yang tersisa, dan siapa yang kena denda. Aplikasi ini dibuat untuk merapikan semua itu: data buku, data siswa, dan riwayat peminjaman disimpan di satu database sehingga lebih mudah dicari dan dikelola.
+Aplikasi ini menyimpan tiga hal: daftar buku, daftar pengguna, dan catatan siapa meminjam buku apa. Semua dikelola lewat panel admin Filament yang bisa dibuka di `/admin`.
 
-Ada dua jenis pengguna, dibedakan lewat kolom `role` di tabel `users`:
+Pengguna punya kolom `role` dengan nilai bawaan `siswa`. Kalau perannya `admin`, fungsi `isAdmin()` di model `User` akan mengembalikan `true`. Siswa juga punya kolom `kelas` yang boleh dikosongkan.
 
-- **admin**: mengelola data buku, pengguna, dan peminjaman.
-- **siswa** (bawaan): orang yang meminjam buku, punya data `kelas`.
+Setiap peminjaman mencatat siapa peminjamnya, buku apa, tanggal pinjam, batas kembali, tanggal kembali (kosong selama buku belum dikembalikan), status (bawaan `dipinjam`), dan denda (bawaan 0).
 
-### Alur Peminjaman
+## Struktur Proyek yang Saya Buat
 
-1. Saat seorang siswa meminjam buku, data baru dibuat di tabel `loans` berisi `loan_date`, `due_date`, dan `status` awal `dipinjam`.
-2. Ketika buku dikembalikan, kolom `returned_at` diisi tanggal pengembalian dan `status` diperbarui.
-3. Kalau pengembalian melewati `due_date`, jumlah dendanya dicatat di kolom `fine`.
+Selain bawaan Laravel, bagian yang saya kerjakan ada di sini:
 
-## Fitur
+```
+app/
+  Models/
+    Book.php
+    Loan.php
+    User.php
+  Filament/Resources/
+    Books/    -> BookResource, halaman (List, Create, Edit), BookForm, BooksTable
+    Loans/    -> LoanResource, halaman (List, Create, Edit), LoanForm, LoansTable
+    Users/    -> UserResource, halaman (List, Create, Edit), UserForm, UsersTable
+database/
+  migrations/
+    ..._create_books_table.php
+    ..._create_loans_table.php
+  peminjaman_buku.sql
+```
 
-- **Buku**: judul, penulis, penerbit, tahun terbit, dan stok.
-- **Peminjaman**: tanggal pinjam, batas kembali, tanggal kembali, status, dan denda.
-- **Pengguna**: akun lengkap dengan peran dan kelas.
-- **Panel admin Filament**: tampilan tabel, form input, pencarian, dan filter.
+Tabel `users` dibuat oleh migration bawaan Laravel yang saya tambah dengan kolom `role` dan `kelas`.
 
-## Teknologi yang Dipakai
+## Skema Database
 
-- PHP dan Laravel
-- Filament 4
-- MySQL (lewat XAMPP)
-- Composer
-- Git dan GitHub
+### Tabel `books`
 
-## ERD
+| Kolom | Tipe | Catatan |
+|-------|------|---------|
+| id | bigint | kunci utama |
+| title | string | judul buku |
+| author | string | penulis |
+| publisher | string | penerbit |
+| year | integer | tahun terbit |
+| stock | integer | bawaan 0 |
 
-Tabel `loans` berada di tengah sebagai penghubung. Setiap baris peminjaman mencatat satu siswa dan satu buku, sedangkan siswa maupun buku bisa muncul di banyak peminjaman (relasi one-to-many).
+### Tabel `loans`
+
+| Kolom | Tipe | Catatan |
+|-------|------|---------|
+| id | bigint | kunci utama |
+| user_id | bigint | foreign key ke `users`, hapus berantai |
+| book_id | bigint | foreign key ke `books`, hapus berantai |
+| loan_date | date | tanggal pinjam |
+| due_date | date | batas pengembalian |
+| returned_at | date | boleh kosong |
+| status | string | bawaan `dipinjam` |
+| fine | integer | bawaan 0 |
+
+### Tabel `users` (kolom tambahan)
+
+| Kolom | Tipe | Catatan |
+|-------|------|---------|
+| role | string | bawaan `siswa` |
+| kelas | string | boleh kosong |
+
+Karena foreign key memakai `cascadeOnDelete()`, menghapus seorang pengguna atau sebuah buku juga akan menghapus riwayat peminjaman yang terkait dengannya.
+
+### Diagram Relasi
 
 ```mermaid
 erDiagram
-  BOOKS ||--o{ LOANS : "dipinjam dalam"
-  LOANS }o--|| USERS : "diajukan oleh"
+  USERS ||--o{ LOANS : "punya"
+  BOOKS ||--o{ LOANS : "tercatat di"
+
+  USERS {
+    bigint id PK
+    string name
+    string email UK
+    string role "default siswa"
+    string kelas "nullable"
+    string password
+  }
 
   BOOKS {
-    bigint id PK "kunci utama"
-    string title "judul buku"
-    string author "penulis"
-    string publisher "penerbit"
-    int year "tahun terbit"
-    int stock "jumlah stok"
+    bigint id PK
+    string title
+    string author
+    string publisher
+    int year
+    int stock "default 0"
   }
 
   LOANS {
-    bigint id PK "kunci utama"
-    bigint book_id FK "mengacu ke books.id"
-    bigint user_id FK "mengacu ke users.id"
-    date loan_date "tanggal pinjam"
-    date due_date "batas kembali"
-    date returned_at "tanggal kembali (boleh kosong)"
-    string status "default: dipinjam"
-    int fine "denda"
-  }
-
-  USERS {
-    bigint id PK "kunci utama"
-    string name "nama"
-    string email UK "email unik"
-    string password "kata sandi (hash)"
-    string role "admin atau siswa"
-    string kelas "kelas siswa"
-    timestamp email_verified_at "verifikasi email"
+    bigint id PK
+    bigint user_id FK
+    bigint book_id FK
+    date loan_date
+    date due_date
+    date returned_at "nullable"
+    string status "default dipinjam"
+    int fine "default 0"
   }
 ```
 
-Keterangan relasi:
+## Model
 
-- `books` ke `loans`: satu buku bisa dipinjam berkali-kali (`loans.book_id`).
-- `users` ke `loans`: satu pengguna bisa punya banyak riwayat peminjaman (`loans.user_id`).
+**Book** (`app/Models/Book.php`)
+- `$fillable`: `title`, `author`, `publisher`, `year`, `stock`.
 
-## Dokumentasi Model
+**Loan** (`app/Models/Loan.php`)
+- `$fillable`: `user_id`, `book_id`, `loan_date`, `due_date`, `returned_at`, `status`, `fine`.
+- `$casts`: `loan_date`, `due_date`, dan `returned_at` dibaca sebagai tanggal (date).
+- `user()`: relasi `belongsTo` ke `User`, misalnya `$loan->user->name`.
+- `book()`: relasi `belongsTo` ke `Book`, misalnya `$loan->book->title`.
 
-### Book (`app/Models/Book.php`)
+**User** (`app/Models/User.php`)
+- `$fillable`: `name`, `email`, `password`, `role`, `kelas`.
+- `$hidden`: `password` dan `remember_token`.
+- `casts()`: `email_verified_at` sebagai datetime dan `password` otomatis di-hash.
+- `isAdmin()`: `true` jika `role` bernilai `admin`.
 
-| Elemen | Jenis | Keterangan |
-|--------|-------|------------|
-| `$fillable` | properti | Kolom yang boleh diisi sekaligus: `title`, `author`, `publisher`, `year`, `stock`. |
-| `loans()` | relasi hasMany | Mengambil semua peminjaman untuk buku ini. Contoh: `$book->loans`. |
+## Panel Admin
 
-### Loan (`app/Models/Loan.php`)
+Panel Filament memiliki tiga menu kelola data:
 
-| Elemen | Jenis | Keterangan |
-|--------|-------|------------|
-| `$fillable` | properti | `user_id`, `book_id`, `loan_date`, `due_date`, `returned_at`, `status`, `fine`. |
-| `$casts` | properti | `loan_date`, `due_date`, dan `returned_at` otomatis dibaca sebagai tanggal (Carbon). |
-| `user()` | relasi belongsTo | Mengambil peminjamnya lewat `user_id`. Contoh: `$loan->user->name`. |
-| `book()` | relasi belongsTo | Mengambil buku yang dipinjam lewat `book_id`. Contoh: `$loan->book->title`. |
+| Menu | Resource | Alamat contoh |
+|------|----------|---------------|
+| Buku | `BookResource` | `/admin/books` |
+| Peminjaman | `LoanResource` | `/admin/loans` |
+| Pengguna | `UserResource` | `/admin/users` |
 
-### User (`app/Models/User.php`)
+### Tabel Buku dan Tombol Pinjam
 
-| Elemen | Jenis | Keterangan |
-|--------|-------|------------|
-| `$fillable` | properti | `name`, `email`, `password`, `role`, `kelas`. |
-| `$hidden` | properti | `password` dan `remember_token` disembunyikan saat model diubah ke array atau JSON. |
-| `casts()` | fungsi | `email_verified_at` jadi datetime, `password` otomatis di-hash. |
-| `isAdmin()` | fungsi | Mengembalikan `true` kalau `role` bernilai `admin`, selain itu `false`. |
-| `loans()` | relasi hasMany | Mengambil riwayat peminjaman milik pengguna. Contoh: `$user->loans`. |
+Tabel buku (`BooksTable`) menampilkan judul, penulis, penerbit, tahun, dan stok. Judul, penulis, dan penerbit bisa dicari lewat kolom pencarian, sedangkan tahun dan stok bisa diurutkan.
+
+Peminjaman dibuat lewat tombol **Pinjam** pada tiap baris buku. Tombol ini hanya muncul untuk pengguna yang bukan admin, dan tidak bisa diklik kalau stok buku 0. Setelah dikonfirmasi, aplikasi:
+
+1. memeriksa jumlah pinjaman aktif milik pengguna; kalau sudah ada 3 buku berstatus `dipinjam`, peminjaman ditolak dengan pesan "Maksimal pinjam 3 buku",
+2. membuat data peminjaman dengan `loan_date` hari ini dan `due_date` 7 hari kemudian (status memakai nilai bawaan `dipinjam`),
+3. mengurangi `stock` buku sebanyak 1,
+4. menampilkan notifikasi "Buku berhasil dipinjam".
+
+### Hak Akses Menu Buku
+
+Pada `BookResource`, admin boleh melakukan semua aksi (lihat, tambah, ubah, hapus). Pengguna lain hanya diizinkan melihat daftar buku, jadi siswa tidak bisa menambah, mengubah, atau menghapus data buku.
+
+### Form Peminjaman
+
+Berkas `LoanForm` mendefinisikan tujuh isian berikut. Namun halaman tambah dan ubah peminjaman saat ini dikunci (lihat bagian Hak Akses Peminjaman di bawah), sehingga form ini belum bisa dibuka lewat menu Loans.
+
+| Isian | Jenis input | Keterangan |
+|-------|-------------|------------|
+| `user_id` | angka | wajib diisi, berupa ID pengguna |
+| `book_id` | angka | wajib diisi, berupa ID buku |
+| `loan_date` | pemilih tanggal | wajib diisi |
+| `due_date` | pemilih tanggal | wajib diisi |
+| `returned_at` | pemilih tanggal | boleh kosong |
+| `status` | teks | wajib diisi, isian awal `dipinjam` |
+| `fine` | angka | wajib diisi, isian awal 0 |
+
+### Hak Akses Peminjaman
+
+Pengaturan akses menu Loans ada di `LoanResource`:
+
+- **Data yang tampil:** admin (`isAdmin()` bernilai `true`) melihat seluruh peminjaman, sedangkan pengguna lain hanya melihat peminjaman miliknya sendiri (`user_id` sama dengan ID pengguna yang login).
+- **Aksi yang diizinkan:** hanya melihat daftar (`viewAny`). Aksi lain seperti tambah dan ubah ditolak, sehingga membuka `/admin/loans/create` menghasilkan halaman **403 Forbidden**.
+- Tombol **Kembalikan** adalah aksi khusus di tabel, jadi tetap berfungsi walaupun tambah dan ubah dikunci.
+
+### Hak Akses Menu Pengguna
+
+Pada `UserResource`, semua aksi hanya diizinkan untuk admin. Pengguna dengan peran `siswa` ditolak, sehingga menu pengelolaan anggota hanya bisa dipakai admin.
+
+### Tabel Peminjaman dan Tombol Kembalikan
+
+Tabel peminjaman (`LoansTable`) menampilkan ID pengguna, ID buku, tanggal pinjam, batas kembali, tanggal kembali, status, dan denda. Kolom `created_at` dan `updated_at` tersedia tetapi disembunyikan secara bawaan. Kolom status tampil sebagai lencana berwarna: kuning untuk `dipinjam`, hijau untuk status lainnya.
+
+Setiap baris yang berstatus `dipinjam` punya tombol **Kembalikan**. Setelah dikonfirmasi, tombol ini:
+
+1. mengisi `returned_at` dengan waktu saat ini,
+2. mengubah `status` menjadi `dikembalikan`,
+3. menghitung denda: jumlah hari keterlambatan dikali Rp1.000 (tanpa keterlambatan, denda 0),
+4. menambah `stock` buku yang dikembalikan sebanyak 1,
+5. menampilkan notifikasi "Buku sudah dikembalikan".
+
+Setelah tombol dipakai, status berubah dan tombol itu tidak muncul lagi pada baris tersebut.
 
 ## Route
 
+File `routes/web.php` hanya berisi satu route buatan sendiri. Halaman admin tidak ditulis di sana karena rutenya didaftarkan otomatis oleh Filament.
+
 | Method | URL | Keterangan |
 |--------|-----|------------|
-| GET | `/` | Menampilkan halaman awal (`welcome`) |
-| GET | `/admin` | Masuk ke panel admin Filament |
+| GET | `/` | Menampilkan view `welcome` (halaman awal bawaan Laravel) |
+| GET | `/admin` | Panel admin Filament (didaftarkan otomatis oleh Filament) |
 
-## Debugging
+## Menjalankan di Komputer Sendiri
 
-Berikut beberapa masalah yang saya temui selama pengerjaan, penyebabnya, dan cara memperbaikinya.
+Kebutuhan: PHP, Composer, dan database (MySQL lewat XAMPP atau SQLite).
 
-### 1. Relasi hanya ada di satu sisi
-
-Waktu memanggil `$book->loans` atau `$user->loans`, muncul error karena relasinya tidak ditemukan. Ternyata yang punya relasi baru model `Loan` (belongsTo), sedangkan sisi sebaliknya belum saya tulis. Solusinya menambahkan `hasMany` di model `Book` dan `User`.
-
-```php
-use Illuminate\Database\Eloquent\Relations\HasMany;
-
-public function loans(): HasMany
-{
-    return $this->hasMany(Loan::class);
-}
-```
-
-### 2. Nilai status gampang salah ketik
-
-Pernah data peminjaman tidak muncul saat difilter, padahal datanya ada. Penyebabnya `status` ditulis sebagai teks bebas, jadi salah satu huruf saja sudah membuat hasilnya tidak cocok. Supaya konsisten, nilai status disimpan sebagai konstanta dan dipakai di semua tempat.
-
-```php
-// app/Models/Loan.php
-public const STATUS_DIPINJAM = 'dipinjam';
-public const STATUS_KEMBALI  = 'dikembalikan';
-
-// contoh pemakaian
-Loan::where('status', Loan::STATUS_DIPINJAM)->get();
-```
-
-### 3. Stok tidak ikut berubah
-
-Setelah buku dipinjam, stok tidak berkurang, dan kalau tidak dijaga bisa jadi minus. Penyebabnya belum ada proses yang mengubah `stock` saat pinjam dan kembali. Cara yang aman adalah memeriksa stok, mengurangi stok, dan menyimpan peminjaman dalam satu transaksi database.
-
-```php
-use Illuminate\Support\Facades\DB;
-
-DB::transaction(function () use ($book, $user) {
-    if ($book->stock < 1) {
-        abort(422, 'Stok buku habis');
-    }
-
-    $book->decrement('stock');
-
-    Loan::create([
-        'user_id'   => $user->id,
-        'book_id'   => $book->id,
-        'loan_date' => now(),
-        'due_date'  => now()->addDays(7),
-        'status'    => Loan::STATUS_DIPINJAM,
-    ]);
-});
-```
-
-### Error yang Sering Muncul
-
-| Pesan error | Penyebab | Solusi |
-|-------------|----------|--------|
-| `SQLSTATE[HY000] [2002] Connection refused` | MySQL belum menyala | Nyalakan MySQL di XAMPP Control Panel, lalu cek `DB_HOST` dan `DB_PORT` |
-| `SQLSTATE[HY000] [1049] Unknown database` | Database belum dibuat atau namanya beda | Buat database di phpMyAdmin dan samakan dengan `DB_DATABASE` |
-| `SQLSTATE[HY000] [1045] Access denied` | Username atau password database salah | Di XAMPP bawaan: `DB_USERNAME=root` dan `DB_PASSWORD=` (kosong) |
-| `Failed to open the referenced table` | Migration `loans` jalan sebelum `users` atau `books` | Pastikan timestamp file migration `loans` paling akhir, lalu `php artisan migrate:fresh` |
-| `SQLSTATE[23000] Integrity constraint violation` | `user_id` atau `book_id` tidak ada di tabel induk | Isi data pengguna dan buku dulu sebelum membuat peminjaman |
-| `MassAssignmentException` | Kolom belum masuk `$fillable` | Tambahkan kolom ke `$fillable` |
-| `No application encryption key has been specified` | `APP_KEY` masih kosong | Jalankan `php artisan key:generate` |
-| `Class "App\Models\Loan" not found` | Namespace atau nama file tidak cocok | Periksa keduanya, lalu jalankan `composer dump-autoload` |
-| `404 Not Found` | Route belum terdaftar atau salah ketik | Cek dengan `php artisan route:list` |
-| Perubahan `.env` tidak terbaca | Konfigurasi masih tersimpan di cache | Jalankan `php artisan config:clear` |
-| Tampilan Filament tidak berubah | Cache lama | Jalankan `php artisan optimize:clear` |
-
-### Cara Melacak Bug
-
-| Tujuan | Cara |
-|--------|------|
-| Melihat isi variabel lalu menghentikan program | `dd($loan);` |
-| Melihat isi variabel tanpa menghentikan program | `dump($request->all());` |
-| Mencatat ke file log | `Log::info('data pinjam', $data);` lalu buka `storage/logs/laravel.log` |
-| Melihat daftar route | `php artisan route:list` |
-| Melihat status migration | `php artisan migrate:status` |
-| Mencoba model langsung | `php artisan tinker`, lalu `Loan::with('user','book')->first();` |
-| Menampilkan pesan error lengkap | Atur `APP_DEBUG=true` di `.env` (hanya saat pengembangan) |
-
-## Cara Instalasi
-
-1. Clone repository
+1. Ambil proyeknya:
 
    ```bash
    git clone https://github.com/gesannn/UKK-2026-Andi-Alfatih-Ghaisan-Peminjaman-Buku.git
    cd UKK-2026-Andi-Alfatih-Ghaisan-Peminjaman-Buku
    ```
 
-2. Install dependency
+2. Pasang dependency:
 
    ```bash
    composer install
    ```
 
-3. Salin file environment dan buat key aplikasi
+3. Siapkan file environment:
 
    ```bash
    cp .env.example .env
    php artisan key:generate
    ```
 
-4. Buat database kosong (misalnya `peminjaman_buku`) di phpMyAdmin, lalu sesuaikan file `.env`
+4. Atur koneksi database di `.env` sesuai database yang dipakai. Contoh untuk MySQL:
 
    ```env
    DB_CONNECTION=mysql
@@ -231,70 +235,112 @@ DB::transaction(function () use ($book, $user) {
    DB_PASSWORD=
    ```
 
-5. Jalankan migration
+5. Buat tabel dengan migration. Sebagai alternatif, file `database/peminjaman_buku.sql` bisa diimpor lewat phpMyAdmin.
 
    ```bash
    php artisan migrate
    ```
 
-6. Buat akun untuk masuk ke panel admin
+6. Buat akun untuk masuk ke panel admin:
 
    ```bash
    php artisan make:filament-user
    ```
 
-   Setelah itu pastikan kolom `role` pada akun tersebut bernilai `admin`.
-
-7. Jalankan aplikasi
+7. Jalankan server, lalu buka `http://127.0.0.1:8000/admin`:
 
    ```bash
    php artisan serve
    ```
 
-   Halaman awal ada di http://127.0.0.1:8000 dan panel admin di http://127.0.0.1:8000/admin.
+Kalau muncul `ERR_CONNECTION_REFUSED` di browser, artinya server belum berjalan. Jalankan `php artisan serve` dulu.
 
-## Database
+## Catatan dari Kode Saat Ini
 
-Struktur tabel dibuat lewat migration, jadi cukup jalankan `php artisan migrate`. Perlu diingat bahwa migration `loans` harus berjalan paling akhir karena tabel ini punya foreign key ke `users` dan `books`.
+Beberapa hal yang saya catat setelah memeriksa kode sendiri:
 
-## Laporan Evaluasi
+- Model `Book` dan `User` belum punya relasi `loans()`, sehingga `$book->loans` dan `$user->loans` belum bisa dipakai. Relasi yang ada baru dari sisi `Loan`.
+- Tabel peminjaman menampilkan ID pengguna dan ID buku sebagai angka, bukan nama siswa dan judul buku.
+- `LoanForm` memakai kolom angka untuk `user_id` dan `book_id`. Kalau form ini nanti dibuka, pilihan berbentuk dropdown (nama siswa dan judul buku) akan lebih mudah dan mengurangi salah input.
+- `status` berupa teks bebas di form maupun di database, jadi rawan salah ketik. Pilihan tetap (dropdown) atau enum akan lebih aman.
 
-### Tujuan
+## Debugging
 
-Membuat aplikasi berbasis Laravel yang membantu perpustakaan sekolah mencatat data buku dan peminjaman dengan lebih rapi.
+Tiga masalah yang saya temui selama menguji aplikasi, penyebabnya, dan cara memperbaikinya.
 
-### Hasil yang Dicapai
+### 1. Tanggal kembali dan denda tidak tersimpan
 
-- Merancang tabel `users`, `books`, dan `loans` beserta ERD (relasi one-to-many).
-- Membuat migration dan model `Book`, `Loan`, dan `User` lengkap dengan relasinya.
-- Membedakan peran pengguna lewat kolom `role` (`admin` dan `siswa`).
-- Menyiapkan panel admin dengan Filament 4.
-- Menulis dokumentasi program dan menyimpan proyek di GitHub.
+**Gejala:** setelah tombol **Kembalikan** diklik, status berubah menjadi `dikembalikan`, tetapi kolom Returned at tetap kosong dan Fine tetap 0.
 
-### Kendala
+**Penyebab:** kolom `returned_at` dan `fine` belum ada di `$fillable` pada model `Loan`. Tombol Kembalikan mengisinya lewat `update()`, dan Laravel mengabaikan kolom yang tidak terdaftar di `$fillable`. Akibatnya hanya `status` yang tersimpan.
 
-- Push ke GitHub sempat gagal dengan pesan `Repository not found` dan `rejected`. Masalah ini selesai setelah alamat remote diperbaiki dan `git pull --rebase` dijalankan.
-- Urutan migration harus diatur supaya tabel `loans` dibuat setelah `users` dan `books`.
+**Perbaikan:** menambahkan kedua kolom ke `$fillable`, dan menambahkan `returned_at` ke `$casts` supaya dibaca sebagai tanggal.
 
-### Kekurangan
+```php
+// app/Models/Loan.php
+protected $fillable = ['user_id', 'book_id', 'loan_date', 'due_date', 'returned_at', 'status', 'fine'];
 
-- Stok belum otomatis berubah saat buku dipinjam atau dikembalikan.
-- Denda belum dihitung otomatis.
-- Nilai `status` masih berupa teks biasa, belum memakai konstanta atau enum.
-- Belum ada pengujian fitur.
+protected $casts = [
+    'loan_date'   => 'date',
+    'due_date'    => 'date',
+    'returned_at' => 'date',
+];
+```
 
-### Rencana Perbaikan
+**Pengujian:** saya membuat peminjaman dengan `loan_date` 10 November 2026 dan `due_date` 14 November 2026, lalu mengembalikannya pada 16 November 2026 (terlambat 2 hari). Hasilnya Returned at terisi 16 November 2026 dan denda tersimpan 2000 (2 hari x Rp1.000).
 
-1. Hubungkan stok dengan peminjaman memakai `DB::transaction()`.
-2. Hitung denda otomatis dari jumlah hari keterlambatan.
-3. Ganti nilai `status` dengan konstanta atau enum.
-4. Batasi fitur tertentu agar hanya bisa diakses admin lewat `isAdmin()`.
-5. Tambahkan pengujian untuk fitur utama.
+### 2. Halaman admin loading terus
 
-### Kesimpulan
+**Gejala:** `http://127.0.0.1:8000/admin` tidak kunjung terbuka, lalu muncul error `Maximum execution time of 60 seconds exceeded`. Perintah `php artisan optimize:clear` juga gagal pada bagian `cache`.
 
-Fondasi aplikasi sudah selesai, yaitu struktur database, model, panel admin, dan dokumentasi. Langkah berikutnya adalah mengotomatiskan stok dan denda supaya aplikasi benar-benar siap dipakai sehari-hari.
+**Penyebab:** MySQL di XAMPP belum menyala, sehingga Laravel tidak bisa terhubung ke database. Sesi dan cache aplikasi disimpan di database, jadi halaman macet saat membacanya.
+
+**Perbaikan:** menyalakan MySQL lewat XAMPP Control Panel, memastikan nama database sama dengan `DB_DATABASE` di `.env`, lalu menjalankan:
+
+```bash
+php artisan optimize:clear
+php artisan serve
+```
+
+### 3. Halaman tambah peminjaman menampilkan 403 Forbidden
+
+**Gejala:** membuka `/admin/loans/create` menghasilkan halaman 403, dan tombol tambah tidak muncul di menu Loans.
+
+**Penyebab:** ini bukan error, melainkan aturan akses di `LoanResource` yang hanya mengizinkan `viewAny`. Peminjaman memang tidak dibuat dari menu Loans, tetapi lewat tombol **Pinjam** di menu Books.
+
+**Tindakan:** tidak ada perbaikan kode. Untuk menguji denda, data peminjaman terlambat dibuat lewat `php artisan tinker` dengan `Loan::create([...])`.
+
+### Perintah yang Dipakai untuk Melacak Masalah
+
+| Tujuan | Perintah |
+|--------|----------|
+| Membersihkan cache aplikasi | `php artisan optimize:clear` |
+| Mencoba model langsung dan membuat data uji | `php artisan tinker` |
+| Melihat daftar route | `php artisan route:list` |
+| Melihat pesan error lengkap | buka `storage/logs/laravel.log` |
+
+## Evaluasi
+
+**Yang sudah selesai**
+- Rancangan tiga tabel (`users`, `books`, `loans`) dengan relasi one-to-many.
+- Migration untuk `books` dan `loans`, serta kolom `role` dan `kelas` di `users`.
+- Model `Book`, `Loan`, dan `User`, termasuk relasi `user()` dan `book()` pada `Loan`.
+- Panel admin Filament 4 untuk mengelola buku, peminjaman, dan pengguna.
+- File `peminjaman_buku.sql` sebagai cadangan struktur database.
+- Perbaikan `$fillable` dan `$casts` pada model `Loan` agar `returned_at` dan `fine` tersimpan saat buku dikembalikan.
+- Tombol Pinjam pada tabel buku (maksimal 3 pinjaman aktif, jatuh tempo 7 hari, stok berkurang otomatis) dan pencarian buku.
+- Pembagian hak akses berdasarkan peran: menu Pengguna hanya untuk admin, siswa hanya bisa melihat daftar buku (tanpa tambah, ubah, hapus), dan siswa hanya melihat peminjamannya sendiri.
+- Tombol Kembalikan pada tabel peminjaman yang mengubah status, menghitung denda keterlambatan (Rp1.000 per hari), dan menambah stok buku.
+
+**Kendala**
+
+- Tanggal kembali dan denda tidak tersimpan setelah tombol Kembalikan dipakai, karena `returned_at` dan `fine` belum masuk `$fillable`. Sudah diperbaiki dan diuji (lihat bagian Debugging).
+- Halaman admin loading terus karena MySQL di XAMPP belum menyala. Teratasi setelah MySQL dinyalakan.
+
+**Yang masih perlu dikembangkan**
+- Menambahkan relasi `loans()` pada `Book` dan `User`.
+- Menampilkan nama siswa dan judul buku di tabel peminjaman, serta mengganti isian ID di form dengan pilihan dropdown.
 
 ## Lisensi
 
-Proyek ini menggunakan lisensi [MIT](https://opensource.org/licenses/MIT).
+Proyek ini memakai lisensi [MIT](https://opensource.org/licenses/MIT).
